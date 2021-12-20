@@ -1,8 +1,7 @@
 import './App.css';
-import WalletConnect, { CLIENT_EVENTS } from "@walletconnect/client";
+import WalletConnect from "@walletconnect/client";
 import QRCodeModal from "@walletconnect/qrcode-modal";
 import React from 'react';
-import { ethers } from "ethers";
 
 // import Modal from "./components/Modal";
 
@@ -30,7 +29,7 @@ class App extends React.Component {
 
     const {accounts, chainId} = await connector.connect()
 
-    QRCodeModal.open("http://localhost:3000", () => {
+    QRCodeModal.open("objective-jones-c0dc6e.netlify.app", () => {
       console.log("opened")
     })
 
