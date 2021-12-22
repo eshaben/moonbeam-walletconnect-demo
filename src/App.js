@@ -1,15 +1,66 @@
 import './App.css';
+import logo from "./logo.png"
 import WalletConnect from "@walletconnect/client";
 import QRCodeModal from "@walletconnect/qrcode-modal";
 import React from 'react';
+import styled from 'styled-components';
+import { ethers } from "ethers"
+import { SUPPORTED_CHAINS } from "./helpers/chains";
 
-// import Modal from "./components/Modal";
+const Wrapper = styled.div`
+  font-family: 'Varela Round', sans-serif;
+`
+
+const Content = styled.div`
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  margin-top: 10em;
+`
+
+const Header = styled.h1`
+  font-size: 2em;
+  margin-bottom: 1em;
+`
+
+const LoadedData = styled.div`
+  margin: 1em;
+  align-self: center;
+`
+
+const Data = styled.p`
+  font-size: 1.2em;
+`
+
+const Button = styled.button`
+  padding: 1em;
+  background: #53cbc9;
+  font-size: 1em;
+  border: none;
+  border-radius: .3em;
+  font-family: 'Varela Round', sans-serif;
+  :hover {
+    transform: scale(1.1);
+    cursor: pointer;
+  }
+`
+
+const OutlinedButton = styled(Button)`
+  background: #ffffff;
+  border: 1px solid #53cbc9;
+  display: flex;
+  margin: auto;
+  margin-top: 3em;
+`
 
 const INITIAL_STATE = {
   connector: null,
-  chainID: 1287,
+  chainId: null,
   accounts: [],
-  address: null
+  address: null,
+  fetching: false,
+  addressBalance: null,
 }
 class App extends React.Component {
 
@@ -19,41 +70,155 @@ class App extends React.Component {
   }
 
   connect = async () => {
-    console.log("clicked")
+    this.setState({ fetching: true })
+    
+    // bridge url
+    const bridge = "https://bridge.walletconnect.org";
 
-    const connector = new WalletConnect({
-      rpc: { [this.state.chainId]: 'https://rpc.testnet.moonbeam.network' },
-      bridge: 'https://bridge.walletconnect.org',
-      qrcodeModal: true
+    // create new connector
+    const connector = new WalletConnect({ bridge, qrcodeModal: QRCodeModal, rpcUrl: "https://rpc.moonriver.moonbeam.network" });
+
+    this.setState({ connector });
+
+    // check if already connected
+    if (!connector.connected) {
+      // create new session
+      await connector.createSession();
+    }
+
+    // subscribe to events
+    this.subscribeToEvents();
+  };
+
+  // this ensures the connection is killed on the users mobile device
+  killSession = () => {
+    const { connector } = this.state;
+    if (connector) {
+      connector.killSession();
+    }
+    this.resetApp();
+  }
+
+  onConnect = (payload) => {
+    const { chainId, accounts } = payload.params[0];
+    const address = accounts[0];
+    this.setState({
+      connected: true,
+      chainId,
+      accounts,
+      address,
+      fetching: false
+    });
+
+    this.getAccountBalance(address)
+  };
+
+  getChainData = (chainId) => {
+    const chainData = SUPPORTED_CHAINS.filter((chain) => chain.chain_id === chainId)[0];
+
+    if (!chainData) {
+      throw new Error("ChainId missing or not supported");
+    }
+
+    return chainData
+  }
+
+  getAccountBalance = async (address) => {
+    const chainData = this.getChainData(this.state.chainId)
+
+    let provider = new ethers.providers.StaticJsonRpcProvider(chainData.rpc_url, {
+      chainId: this.state.chainId,
+      name: chainData.name
     })
 
-    const {accounts, chainId} = await connector.connect()
+    let balance = await provider.getBalance(address)
+    let balanceInMovr = ethers.utils.formatEther(balance)
 
-    QRCodeModal.open("objective-jones-c0dc6e.netlify.app", () => {
-      console.log("opened")
+    this.setState({addressBalance: balanceInMovr})
+  }
+
+  resetApp = () => {
+    this.setState({ ...INITIAL_STATE });
+  }
+
+  subscribeToEvents = () => {
+    const { connector } = this.state
+
+    if (!connector) {
+      return;
+    }
+
+    connector.on("connect", (error, payload) => {
+      if (error) {
+        throw error;
+      }
+
+      this.onConnect(payload);
+    });
+
+    connector.on("disconnect", (error, payload) => {
+      if (error) {
+        throw error;
+      }
+
+      this.resetApp();
     })
 
-    console.log("connected: ", accounts, chainId)
-
+    // default
+    if (connector.connected) {
+      const { chainId, accounts } = connector;
+      const address = accounts[0];
+      this.setState({
+        connected: true,
+        chainId,
+        accounts,
+        address,
+      });
+    }
   }
 
   render() {
     return (
-      <div className="App">
-        <header className="App-header">
-          <p>
-            Moonbeam/Wallet Connect Demo App
-          </p>
-          <button
-            className="App-link"
-            target="_blank"
-            onClick={this.connect}
-          >
-            Connect to WalletConnect
-          </button>
-        </header>
-      </div>
-    );
+      <Wrapper>
+        <img src={logo} alt="logo" />
+        <Content>
+          <Header>
+            Moonbeam WalletConnect Demo App
+          </Header>
+          {this.state.connector && !this.state.fetching ?
+            <LoadedData>
+              <Data>
+                <strong>Connected Address: </strong>
+                { this.state.address }
+              </Data>
+              <Data>
+                <strong>Network: </strong>
+                { this.state.chainId ? this.getChainData(this.state.chainId).name : null }
+              </Data>
+              <Data>
+                <strong>Chain ID: </strong>
+                { this.state.chainId }
+              </Data>
+              <Data>
+                <strong>Balance: </strong>
+                {this.state.addressBalance} MOVR
+              </Data>
+              <OutlinedButton
+                onClick={this.killSession}
+              >
+                Disconnect
+              </OutlinedButton>
+            </LoadedData>
+            :
+            <Button
+              onClick={this.connect}
+            >
+              Connect to WalletConnect
+            </Button>
+          }
+        </Content>
+      </Wrapper>
+    )
   }
 }
 
