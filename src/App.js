@@ -76,7 +76,7 @@ class App extends React.Component {
     const bridge = "https://bridge.walletconnect.org";
 
     // create new connector
-    const connector = new WalletConnect({ bridge, qrcodeModal: QRCodeModal, rpcUrl: "https://rpc.moonriver.moonbeam.network" });
+    const connector = new WalletConnect({ bridge, qrcodeModal: QRCodeModal });
 
     this.setState({ connector });
 
