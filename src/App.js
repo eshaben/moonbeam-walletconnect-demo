@@ -77,7 +77,6 @@ class App extends React.Component {
 
     // create new connector
     const connector = new WalletConnect({ bridge, qrcodeModal: QRCodeModal });
-
     this.setState({ connector });
 
     // check if already connected
@@ -137,6 +136,11 @@ class App extends React.Component {
     this.setState({addressBalance: balanceInMovr})
   }
 
+  sendTransaction = async () => {
+    const result = await this.state.connector.sendTransaction({ from: this.state.address, to: "0xDAC66EDAB6e4fB1f6388d082f4689c2Ed1924554", value: "0x1BC16D674EC80000" })
+    console.log(result)
+  }
+
   resetApp = () => {
     this.setState({ ...INITIAL_STATE });
   }
@@ -185,7 +189,7 @@ class App extends React.Component {
           <Header>
             Moonbeam WalletConnect Demo App
           </Header>
-          {this.state.connector && !this.state.fetching ?
+          {this.state.connector && this.state.connector.connected && !this.state.fetching ?
             <LoadedData>
               <Data>
                 <strong>Connected Address: </strong>
@@ -201,8 +205,13 @@ class App extends React.Component {
               </Data>
               <Data>
                 <strong>Balance: </strong>
-                {this.state.addressBalance} MOVR
+                {this.state.addressBalance} {this.state.chainId ? this.getChainData(this.state.chainId).native_currency.symbol : null}
               </Data>
+              <OutlinedButton
+                onClick={this.sendTransaction}
+              >
+                Sign Transaction
+              </OutlinedButton>
               <OutlinedButton
                 onClick={this.killSession}
               >
