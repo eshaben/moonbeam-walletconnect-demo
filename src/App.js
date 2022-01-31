@@ -1,11 +1,11 @@
 import './App.css';
 import logo from "./logo.png"
-import WalletConnect from "@walletconnect/client";
-import QRCodeModal from "@walletconnect/qrcode-modal";
 import React from 'react';
 import styled from 'styled-components';
-import { ethers } from "ethers"
-import { SUPPORTED_CHAINS } from "./helpers/chains";
+// import WalletConnectProvider from "@walletconnect/web3-provider";
+import { ethers, providers } from "ethers";
+import { Web3 } from "web3";
+import WalletConnectProvider from '@walletconnect/ethereum-provider'
 
 const Wrapper = styled.div`
   font-family: 'Varela Round', sans-serif;
@@ -61,6 +61,7 @@ const INITIAL_STATE = {
   address: null,
   fetching: false,
   addressBalance: null,
+  provider: null,
 }
 class App extends React.Component {
 
@@ -71,114 +72,92 @@ class App extends React.Component {
 
   connect = async () => {
     this.setState({ fetching: true })
-    
-    // bridge url
-    const bridge = "https://bridge.walletconnect.org";
 
     // create new connector
-    const connector = new WalletConnect({ bridge, qrcodeModal: QRCodeModal });
-    this.setState({ connector });
+    const provider = new WalletConnectProvider({
+      rpc: {1287: "https://moonbeam-alpha.api.onfinality.io/rpc?apikey=ddd4b858-48ac-4637-b023-7a15fcca2be1"},
+      pollingInterval: 50000,
+    })
+
+    // const provider = new WalletConnectProvider({
+    //   rpc: { 137: "https://rpc-mainnet.matic.network" }
+    // })
+
+    await provider.enable()
+
+    // const walletConnector = provider.wc
+    this.setState({ connector: provider });
 
     // check if already connected
-    if (!connector.connected) {
+    if (!provider) {
       // create new session
-      await connector.createSession();
+      console.log("do we ever get here??")
+      await provider.createSession({ chainId: provider.chainId })
     }
 
-    // subscribe to events
+    const web3Provider = new Web3.provider(provider);
+    const account = "0xdbE47E1D60D8f1D68CdC786d2FF18139eD4E0636"
+    const balance = web3Provider.utils.fromWei(await web3Provider.eth.getBalance(account), 'ether')
+    console.log(`balance = ${balance}`)
+
     this.subscribeToEvents();
   };
 
-  // this ensures the connection is killed on the users mobile device
-  killSession = () => {
-    const { connector } = this.state;
-    if (connector) {
-      connector.killSession();
-    }
-    this.resetApp();
-  }
-
-  onConnect = (payload) => {
+  onConnect = async (payload) => {
     const { chainId, accounts } = payload.params[0];
     const address = accounts[0];
+
     this.setState({
       connected: true,
       chainId,
       accounts,
       address,
-      fetching: false
     });
-
-    this.getAccountBalance(address)
-  };
-
-  getChainData = (chainId) => {
-    const chainData = SUPPORTED_CHAINS.filter((chain) => chain.chain_id === chainId)[0];
-
-    if (!chainData) {
-      throw new Error("ChainId missing or not supported");
-    }
-
-    return chainData
   }
 
-  getAccountBalance = async (address) => {
-    const chainData = this.getChainData(this.state.chainId)
+  subscribeToEvents = async () => {
+    const { connector, provider } = this.state;
 
-    let provider = new ethers.providers.StaticJsonRpcProvider(chainData.rpc_url, {
-      chainId: this.state.chainId,
-      name: chainData.name
-    })
-
-    let balance = await provider.getBalance(address)
-    let balanceInMovr = ethers.utils.formatEther(balance)
-
-    this.setState({addressBalance: balanceInMovr})
-  }
-
-  sendTransaction = async () => {
-    const result = await this.state.connector.sendTransaction({ from: this.state.address, to: "0xDAC66EDAB6e4fB1f6388d082f4689c2Ed1924554", value: "0x1BC16D674EC80000" })
-    console.log(result)
-  }
-
-  resetApp = () => {
-    this.setState({ ...INITIAL_STATE });
-  }
-
-  subscribeToEvents = () => {
-    const { connector } = this.state
-
-    if (!connector) {
-      return;
-    }
-
-    connector.on("connect", (error, payload) => {
+    connector.on("connect", async (error, payload) => {
       if (error) {
         throw error;
       }
 
-      this.onConnect(payload);
+      console.log("hello? connect?")
+
+      const web3Provider = new providers.Web3Provider(provider);
+      // const web3Provider = new Web3(provider)
+      console.log(web3Provider)
+      const account = payload.params[0].accounts[0];
+      console.log(account)
+
+      let balance = ""
+      try {
+        balance = await web3Provider.getBalance(account);
+      } catch(e) {
+        console.log(e)
+      }
+      // const balance = ethers.utils.formatEther(await web3Provider.getBalance(account))
+      console.log(`balance = ${balance}`)
+
+      // this.onConnect(payload)
     });
 
-    connector.on("disconnect", (error, payload) => {
-      if (error) {
-        throw error;
-      }
+    // if (!provider.connected) {
+    //   return;
+    // }
 
-      this.resetApp();
-    })
+    // console.log("yes provider is present")
 
-    // default
-    if (connector.connected) {
-      const { chainId, accounts } = connector;
-      const address = accounts[0];
-      this.setState({
-        connected: true,
-        chainId,
-        accounts,
-        address,
-      });
-    }
+    // connector.on("connect", () => {
+    //   console.log("connector connected??")
+    // })
+
+    // provider.on("connect", () => {
+    //   console.log("hellooyellow?")
+    // })
+
+    // console.log("HIII", provider)
   }
 
   render() {

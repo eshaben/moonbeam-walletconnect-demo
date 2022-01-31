@@ -7,14 +7,17 @@
     "@testing-library/react": "^11.1.0",
     "@testing-library/user-event": "^12.1.10",
     "@walletconnect/client": "^1.7.0",
+    "@walletconnect/ethereum-provider": "^1.7.1",
     "@walletconnect/qrcode-modal": "^1.7.0",
     "@walletconnect/utils": "^1.7.0",
+    "@walletconnect/web3-provider": "^1.7.1",
     "ethers": "^5.5.2",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
     "react-scripts": "4.0.3",
     "styled-components": "^5.3.3",
-    "web-vitals": "^1.0.1"
+    "web-vitals": "^1.0.1",
+    "web3": "^1.7.0"
   },
   "scripts": {
     "start": "react-scripts start",
