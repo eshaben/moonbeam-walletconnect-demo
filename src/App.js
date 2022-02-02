@@ -2,10 +2,10 @@ import './App.css';
 import logo from "./logo.png"
 import WalletConnect from "@walletconnect/client";
 import QRCodeModal from "@walletconnect/qrcode-modal";
-import React from 'react';
+import { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { ethers } from "ethers"
-import { SUPPORTED_CHAINS } from "./helpers/chains";
+import { SUPPORTED_NETWORKS } from "./helpers/networks";
 
 const Wrapper = styled.div`
   font-family: 'Varela Round', sans-serif;
@@ -54,134 +54,117 @@ const OutlinedButton = styled(Button)`
   margin-top: 3em;
 `
 
-const INITIAL_STATE = {
-  connector: null,
-  chainId: null,
-  accounts: [],
-  address: null,
-  fetching: false,
-  addressBalance: null,
-}
-class App extends React.Component {
+function App() {
+  const [connector, setConnector] = useState(null);
+  const [chainId, setChainId] = useState(null);
+  const [account, setAccount] = useState(null);
+  const [fetching, setFetching] = useState(false);
+  const [balance, setBalance] = useState(null);
+  const [error, setError] = useState(null)
+  const [supported, setSupported] = useState(false);
+  const [network, setNetwork] = useState(null);
+  const [symbol, setSymbol] = useState(null);
 
-  constructor(props) {
-    super(props);
-    this.state = {...INITIAL_STATE};
-  }
+  useEffect (() => {
+    const onConnect = async (chainId, address) => {
+      setAccount(address);
 
-  connect = async () => {
-    this.setState({ fetching: true })
+      // get chain data
+      const networkData = SUPPORTED_NETWORKS.filter((chain) => chain.chain_id === chainId)[0];    
+
+      if (!networkData){
+        setSupported(false)
+      } else {
+        setSupported(true)
+        setNetwork(networkData.name)
+        setSymbol(networkData.native_currency.symbol)
+        setChainId(chainId);
+
+        // get account balance
+        let provider = new ethers.providers.StaticJsonRpcProvider(networkData.rpc_url, {
+          chainId,
+          name: networkData.name
+        });
+
+        let balance = await provider.getBalance(address);
+        let formattedBalance = ethers.utils.formatEther(balance);
+  
+        setBalance(formattedBalance)
+      }
+    };
+
+    const refreshData = async () => {
+      const { chainId, accounts } = connector;
+      await onConnect(chainId, accounts[0]);
+      setFetching(false)
+    }
+
+    if (connector) {
+      connector.on("connect", async (error, payload) => {
+        const {chainId, accounts} = payload.params[0];
+        await onConnect(chainId, accounts[0]);
+        setFetching(false)
+      })
     
+      connector.on("disconnect", (error, payload) => {
+        if (error) {
+          throw error;
+        }
+        resetApp();
+      })
+    
+      if (!chainId || !account || !balance) {
+        if (connector.connected) {
+          const { chainId, accounts } = connector;
+          refreshData(chainId, accounts)
+        }
+      }
+    }
+  }, [connector, balance, chainId, account])
+
+  const connect = async () => { 
+    setFetching(true);
+
     // bridge url
     const bridge = "https://bridge.walletconnect.org";
 
     // create new connector
     const connector = new WalletConnect({ bridge, qrcodeModal: QRCodeModal });
-    this.setState({ connector });
+    setConnector(connector);
 
     // check if already connected
     if (!connector.connected) {
       // create new session
       await connector.createSession();
     }
-
-    // subscribe to events
-    this.subscribeToEvents();
   };
 
   // this ensures the connection is killed on the users mobile device
-  killSession = () => {
-    const { connector } = this.state;
+  const killSession = () => {
     if (connector) {
       connector.killSession();
     }
-    this.resetApp();
+    resetApp();
   }
 
-  onConnect = (payload) => {
-    const { chainId, accounts } = payload.params[0];
-    const address = accounts[0];
-    this.setState({
-      connected: true,
-      chainId,
-      accounts,
-      address,
-      fetching: false
-    });
-
-    this.getAccountBalance(address)
-  };
-
-  getChainData = (chainId) => {
-    const chainData = SUPPORTED_CHAINS.filter((chain) => chain.chain_id === chainId)[0];
-
-    if (!chainData) {
-      throw new Error("ChainId missing or not supported");
-    }
-
-    return chainData
-  }
-
-  getAccountBalance = async (address) => {
-    const chainData = this.getChainData(this.state.chainId)
-
-    let provider = new ethers.providers.StaticJsonRpcProvider(chainData.rpc_url, {
-      chainId: this.state.chainId,
-      name: chainData.name
-    })
-
-    let balance = await provider.getBalance(address)
-    let balanceInMovr = ethers.utils.formatEther(balance)
-
-    this.setState({addressBalance: balanceInMovr})
-  }
-
-  sendTransaction = async () => {
-    const result = await this.state.connector.sendTransaction({ from: this.state.address, to: "0xDAC66EDAB6e4fB1f6388d082f4689c2Ed1924554", value: "0x1BC16D674EC80000" })
-    console.log(result)
-  }
-
-  resetApp = () => {
-    this.setState({ ...INITIAL_STATE });
-  }
-
-  subscribeToEvents = () => {
-    const { connector } = this.state
-
-    if (!connector) {
-      return;
-    }
-
-    connector.on("connect", (error, payload) => {
-      if (error) {
-        throw error;
-      }
-
-      this.onConnect(payload);
-    });
-
-    connector.on("disconnect", (error, payload) => {
-      if (error) {
-        throw error;
-      }
-
-      this.resetApp();
-    })
-
-    // default
-    if (connector.connected) {
-      const { chainId, accounts } = connector;
-      const address = accounts[0];
-      this.setState({
-        connected: true,
-        chainId,
-        accounts,
-        address,
-      });
+  const sendTransaction = async () => {
+    try {
+      setError(null)
+      await connector.sendTransaction({ from: account, to: account, value: "0x1BC16D674EC80000" })
+    } catch (e) {
+      setError(e.message)
     }
   }
 
-  render() {
+  const resetApp = () => {
+    setConnector(null);
+    setChainId(null);
+    setAccount(null);
+    setFetching(false);
+    setBalance(null);
+    setError(null);
+  }
+
     return (
       <Wrapper>
         <img src={logo} alt="logo" />
@@ -189,38 +172,47 @@ class App extends React.Component {
           <Header>
             Moonbeam WalletConnect Demo App
           </Header>
-          {this.state.connector && this.state.connector.connected && !this.state.fetching ?
+          {error && 
+            <div>There was an error: {error} </div>
+          }
+          {connector && !fetching ?
             <LoadedData>
               <Data>
-                <strong>Connected Address: </strong>
-                { this.state.address }
+                <strong>Connected Account: </strong>
+                { account }
               </Data>
-              <Data>
-                <strong>Network: </strong>
-                { this.state.chainId ? this.getChainData(this.state.chainId).name : null }
-              </Data>
-              <Data>
-                <strong>Chain ID: </strong>
-                { this.state.chainId }
-              </Data>
-              <Data>
-                <strong>Balance: </strong>
-                {this.state.addressBalance} {this.state.chainId ? this.getChainData(this.state.chainId).native_currency.symbol : null}
-              </Data>
+                {supported ? 
+                <>
+                  <Data>
+                    <strong>Network: </strong>
+                    { network }
+                  </Data>
+                  <Data>
+                    <strong>Chain ID: </strong>
+                    { chainId }
+                  </Data>
+                  <Data>
+                    <strong>Balance: </strong>
+                    { balance } { symbol }
+                  </Data>
+                  <OutlinedButton
+                    onClick={sendTransaction}
+                  >
+                    Send Transaction
+                  </OutlinedButton>
+                </>
+                :
+                <strong>Network not supported. Please disconnect, switch networks, and connect again.</strong>
+              }
               <OutlinedButton
-                onClick={this.sendTransaction}
-              >
-                Sign Transaction
-              </OutlinedButton>
-              <OutlinedButton
-                onClick={this.killSession}
+                onClick={killSession}
               >
                 Disconnect
               </OutlinedButton>
             </LoadedData>
             :
             <Button
-              onClick={this.connect}
+              onClick={connect}
             >
               Connect to WalletConnect
             </Button>
@@ -228,7 +220,6 @@ class App extends React.Component {
         </Content>
       </Wrapper>
     )
-  }
 }
 
 export default App;
