@@ -66,8 +66,9 @@ function App() {
   const [symbol, setSymbol] = useState(null);
 
   useEffect (() => {
-    const onConnect = async (chainId, address) => {
-      setAccount(address);
+    const onConnect = async (chainId, connectedAccount) => {
+      setAccount(connectedAccount);
+      setChainId(chainId);
 
       // get chain data
       const networkData = SUPPORTED_NETWORKS.filter((chain) => chain.chain_id === chainId)[0];    
@@ -78,7 +79,6 @@ function App() {
         setSupported(true)
         setNetwork(networkData.name)
         setSymbol(networkData.native_currency.symbol)
-        setChainId(chainId);
 
         // get account balance
         let provider = new ethers.providers.StaticJsonRpcProvider(networkData.rpc_url, {
@@ -86,7 +86,7 @@ function App() {
           name: networkData.name
         });
 
-        let balance = await provider.getBalance(address);
+        let balance = await provider.getBalance(connectedAccount);
         let formattedBalance = ethers.utils.formatEther(balance);
   
         setBalance(formattedBalance)
@@ -113,11 +113,8 @@ function App() {
         resetApp();
       })
     
-      if (!chainId || !account || !balance) {
-        if (connector.connected) {
-          const { chainId, accounts } = connector;
-          refreshData(chainId, accounts)
-        }
+      if ((!chainId || !account || !balance) && connector.connected) {
+        refreshData()
       }
     }
   }, [connector, balance, chainId, account])
@@ -181,15 +178,15 @@ function App() {
                 <strong>Connected Account: </strong>
                 { account }
               </Data>
+              <Data>
+                <strong>Chain ID: </strong>
+                { chainId }
+              </Data>
                 {supported ? 
                 <>
                   <Data>
                     <strong>Network: </strong>
                     { network }
-                  </Data>
-                  <Data>
-                    <strong>Chain ID: </strong>
-                    { chainId }
                   </Data>
                   <Data>
                     <strong>Balance: </strong>
