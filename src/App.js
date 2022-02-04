@@ -214,7 +214,7 @@ function App() {
             <Button
               onClick={connect}
             >
-              Connect to WalletConnect
+              Connect Wallet
             </Button>
           }
         </Content>
