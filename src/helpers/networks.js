@@ -47,4 +47,4 @@ export const SUPPORTED_NETWORKS = [
       balance: "",
     },
   },
-]
+];

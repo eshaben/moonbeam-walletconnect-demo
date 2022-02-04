@@ -1,6 +1,6 @@
 # Moonbeam WalletConnect Demo
 
-This project is a POC to demonstrate how WalletConnect can be used with Moonbeam networks. 
+This project is a POC to demonstrate how WalletConnect can be used with Moonbeam networks.
 
 ## Run the Project Locally
 
